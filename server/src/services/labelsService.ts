@@ -78,7 +78,7 @@ function resolveDateParam(dateParam?: string): string {
  * - Open MOs created on the selected date (dbo.OpenMO.MOCreatedDate)
  * - Excludes blanks (item # starts with 2, or description contains BLANK)
  * - BOM components where ComponentType = 'N', OperationSequenceNumber starts with 5,
- *   and not blank comps (comp # starts with 2 / desc contains BLANK)
+ *   and not blank/winding comps (comp # starts with 2 / desc contains BLANK or WINDING)
  * - Point Use (5HDL) filter deferred
  */
 export async function getMorningLabels(dateParam?: string): Promise<MorningLabelsResult> {
@@ -106,6 +106,7 @@ export async function getMorningLabels(dateParam?: string): Promise<MorningLabel
        AND LTRIM(RTRIM(bom.[ComponentType])) = @componentType
        AND LEFT(LTRIM(RTRIM(bom.[CompNumber])), 1) <> '2'
        AND LTRIM(RTRIM(ISNULL(bom.[CompDesc], ''))) NOT LIKE '%BLANK%'
+       AND LTRIM(RTRIM(ISNULL(bom.[CompDesc], ''))) NOT LIKE '%WINDING%'
        AND LEFT(LTRIM(RTRIM(CAST(bom.[OperationSequenceNumber] AS VARCHAR(20)))), 1) = '5'
        AND (
             bom.[InEffectivityDate] IS NULL
