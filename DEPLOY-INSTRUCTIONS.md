@@ -25,11 +25,13 @@
    - Only touches IIS site/app pool `ReceivingLabels`
    - Does **not** kill other processes
    - Does **not** change shared ARR timeout
-   - Picks the **next free** API port (from 3011+) and IIS port (from 8085+, so 8082/8084 stay free)
-   - Saves chosen ports in `deploy-ports.json` and reuses them next time if still free
+   - Picks the next free API port (from 3011+)
+   - Keeps IIS / public URL fixed on port **8087**
+   - Saves chosen API port in `deploy-ports.json` and reuses it next time if still free
 
 6. **Open the site**
-   - Use the URLs printed at the end of the deploy script (port is dynamic).
+   - http://localhost:8087
+   - http://shock:8087
 
 ## Repo
 

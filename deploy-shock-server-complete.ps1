@@ -7,7 +7,8 @@
 # - Only manages IIS site/app pool "ReceivingLabels"
 # - Does NOT kill other processes
 # - Does NOT change shared ARR timeout
-# - Picks the next free API + IIS ports (avoids 8082 Scheduler, 8084 Plotter, etc.)
+# - Picks the next free API port (from 3011+)
+# - Keeps IIS / public URL fixed on port 8087
 
 $ErrorActionPreference = "Continue"
 
@@ -74,7 +75,8 @@ $pm2Name = "receiving-labels-api"
 $iisFrontendPath = "C:\inetpub\ReceivingLabels\frontend"
 # Prefer these ranges; skip anything already bound/listening
 $apiPortStart = 3011
-$iisPortStart = 8085
+# Public site stays on a fixed port (do not auto-bump away from this)
+$iisPort = 8087
 
 $serverIP = (Get-NetIPAddress -AddressFamily IPv4 |
     Where-Object { $_.IPAddress -notlike "127.*" -and $_.IPAddress -notlike "169.254.*" } |
@@ -111,21 +113,19 @@ if ($pm2Check) {
 }
 Write-Host ""
 
-# Step 2: Pick free ports (no process kills)
-Write-Host "Step 2: Selecting free API and IIS ports..." -ForegroundColor Green
+# Step 2: Pick free API port; keep IIS fixed at 8087
+Write-Host "Step 2: Selecting API port (IIS fixed at 8087)..." -ForegroundColor Green
 $iisBoundPorts = @(Get-IisBoundPorts)
 Write-Host ("IIS already bound ports: " + (($iisBoundPorts | Sort-Object) -join ", ")) -ForegroundColor Gray
 
-# Prefer previously saved ports if still free
+# Prefer previously saved API port if still free
 $portsFile = Join-Path $scriptPath "deploy-ports.json"
 $preferredApi = $null
-$preferredIis = $null
 if (Test-Path $portsFile) {
     try {
         $saved = Get-Content $portsFile -Raw | ConvertFrom-Json
         $preferredApi = [int]$saved.apiPort
-        $preferredIis = [int]$saved.iisPort
-        Write-Host ("Found saved ports from last deploy: API " + $preferredApi + ", IIS " + $preferredIis) -ForegroundColor Gray
+        Write-Host ("Found saved API port from last deploy: " + $preferredApi) -ForegroundColor Gray
     } catch {
         # ignore corrupt file
     }
@@ -137,14 +137,31 @@ if ($preferredApi -and -not (Test-TcpPortInUse -Port $preferredApi)) {
     $apiPort = Get-NextFreePort -StartPort $apiPortStart
 }
 
-if ($preferredIis -and ($iisBoundPorts -notcontains $preferredIis) -and -not (Test-TcpPortInUse -Port $preferredIis)) {
-    $iisPort = $preferredIis
-} else {
-    $iisPort = Get-NextFreePort -StartPort $iisPortStart -AlsoAvoid $iisBoundPorts
+# Ensure 8087 is not owned by a different IIS site
+try {
+    Import-Module WebAdministration -ErrorAction SilentlyContinue
+    $foreign8087 = Get-WebBinding -ErrorAction SilentlyContinue | Where-Object {
+        $_.bindingInformation -match ':8087:' -and $_.ItemXPath -notlike ("*" + $siteName + "*")
+    }
+    # ItemXPath may not include site name reliably; check site bindings explicitly
+    $sites = Get-Website -ErrorAction SilentlyContinue
+    foreach ($s in @($sites)) {
+        if ($s.Name -eq $siteName) { continue }
+        $b = Get-WebBinding -Name $s.Name -ErrorAction SilentlyContinue | Where-Object {
+            $_.bindingInformation -match ':8087:'
+        }
+        if ($b) {
+            Write-Host ("ERROR: IIS port 8087 is already used by site '" + $s.Name + "'.") -ForegroundColor Red
+            Write-Host "Receiving Labels is configured to stay on 8087. Free that binding or change the fixed port in the deploy script." -ForegroundColor Yellow
+            exit 1
+        }
+    }
+} catch {
+    Write-Host ("WARNING: Could not fully verify IIS 8087 ownership: " + $_) -ForegroundColor Yellow
 }
 
 Write-Host ("Selected API port:  " + $apiPort + " (loopback Node / PM2)") -ForegroundColor Yellow
-Write-Host ("Selected IIS port:  " + $iisPort + " (public site)") -ForegroundColor Yellow
+Write-Host ("Selected IIS port:  " + $iisPort + " (fixed public site)") -ForegroundColor Yellow
 Write-Host ""
 
 # Persist selection for next deploy
