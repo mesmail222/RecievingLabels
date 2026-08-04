@@ -12,9 +12,9 @@
 
 3. **Pull latest code**
    ```powershell
-   .\force-update-from-git.ps1
+   .\pull-from-git.ps1
    ```
-   Type `yes` when prompted. This resets the working tree to match GitHub.
+   Fast-forward pull from `origin/main`. Leaves `server\.env` alone (gitignored).
 
 4. **Ensure database credentials exist**
    - Confirm `server\.env` has valid `DATABASE_*` values for ScheduleDB.

@@ -1,5 +1,5 @@
 # Deploy MO Receiving Labels on shock.lms.shimano.com
-# Run as Administrator on the shock server after force-update-from-git.ps1
+# Run as Administrator on the shock server after pull-from-git.ps1
 
 $ErrorActionPreference = "Continue"
 
