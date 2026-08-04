@@ -23,7 +23,18 @@ function requireEnv(name: string): string {
   return value;
 }
 
-const config: sql.config = {
+/** @types/mssql IOptions is incomplete vs runtime tedious options */
+interface ExtendedConfig extends sql.config {
+  options: {
+    encrypt?: boolean;
+    trustServerCertificate?: boolean;
+    enableArithAbort?: boolean;
+    connectTimeout?: number;
+    requestTimeout?: number;
+  };
+}
+
+const config: ExtendedConfig = {
   server: requireEnv('DATABASE_SERVER'),
   database: requireEnv('DATABASE_NAME'),
   user: requireEnv('DATABASE_USER'),

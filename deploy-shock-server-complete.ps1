@@ -198,8 +198,12 @@ if (Test-Path "dist") {
     Remove-Item -Path "dist" -Recurse -Force
 }
 npm run build
-if ($LASTEXITCODE -ne 0 -and -not (Test-Path "dist\index.js")) {
-    Write-Host "ERROR: Backend build failed (dist\index.js missing)." -ForegroundColor Red
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "ERROR: Backend TypeScript build failed." -ForegroundColor Red
+    exit 1
+}
+if (-not (Test-Path "dist\index.js")) {
+    Write-Host "ERROR: dist\index.js missing after build." -ForegroundColor Red
     exit 1
 }
 Write-Host "Backend built successfully!" -ForegroundColor Green
