@@ -1,6 +1,13 @@
 # Deploy MO Receiving Labels on shock.lms.shimano.com
 # Run as Administrator on the shock server after pull-from-git.ps1
 # Compatible with Windows PowerShell 5.1
+#
+# Isolation rules:
+# - Only manages PM2 app "receiving-labels-api"
+# - Only manages IIS site/app pool "ReceivingLabels"
+# - Does NOT kill other processes
+# - Does NOT change shared ARR timeout
+# - Picks the next free API + IIS ports (avoids 8082 Scheduler, 8084 Plotter, etc.)
 
 $ErrorActionPreference = "Continue"
 
@@ -14,17 +21,60 @@ trap {
     break
 }
 
+function Test-TcpPortInUse {
+    param([int]$Port)
+    $conn = Get-NetTCPConnection -LocalPort $Port -ErrorAction SilentlyContinue
+    return [bool]$conn
+}
+
+function Get-IisBoundPorts {
+    $ports = @()
+    try {
+        Import-Module WebAdministration -ErrorAction SilentlyContinue
+        $bindings = Get-WebBinding -ErrorAction SilentlyContinue
+        foreach ($b in @($bindings)) {
+            # bindingInformation like "*:8084:" or "172.x.x.x:8084:host"
+            if ($b.bindingInformation -match ':(\d+):') {
+                $ports += [int]$Matches[1]
+            }
+        }
+    } catch {
+        # ignore - fall back to TCP checks only
+    }
+    return $ports | Select-Object -Unique
+}
+
+function Get-NextFreePort {
+    param(
+        [int]$StartPort,
+        [int[]]$AlsoAvoid = @(),
+        [int]$MaxTries = 50
+    )
+    $port = $StartPort
+    $avoid = @{}
+    foreach ($p in $AlsoAvoid) { $avoid[[int]$p] = $true }
+
+    for ($i = 0; $i -lt $MaxTries; $i++) {
+        if (-not $avoid.ContainsKey($port) -and -not (Test-TcpPortInUse -Port $port)) {
+            return $port
+        }
+        $port++
+    }
+    throw ("Could not find a free port starting at " + $StartPort)
+}
+
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "MO Receiving Labels - Complete Deployment" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
-$apiPort = 3011
-$iisPort = 8084
 $siteName = "ReceivingLabels"
 $appPoolName = "ReceivingLabels"
 $pm2Name = "receiving-labels-api"
 $iisFrontendPath = "C:\inetpub\ReceivingLabels\frontend"
+# Prefer these ranges; skip anything already bound/listening
+$apiPortStart = 3011
+$iisPortStart = 8085
 
 $serverIP = (Get-NetIPAddress -AddressFamily IPv4 |
     Where-Object { $_.IPAddress -notlike "127.*" -and $_.IPAddress -notlike "169.254.*" } |
@@ -47,29 +97,62 @@ if (-not (Test-Path (Join-Path $scriptPath "server"))) {
     exit 1
 }
 
-# Step 2: Stop PM2
-Write-Host "Step 2: Stopping PM2 process ($pm2Name)..." -ForegroundColor Green
+# Step 1: Stop only OUR PM2 app (do not kill other processes / ports)
+Write-Host ("Step 1: Stopping PM2 process (" + $pm2Name + ") only...") -ForegroundColor Green
 $pm2Check = Get-Command pm2 -ErrorAction SilentlyContinue
 if ($pm2Check) {
     & pm2 stop $pm2Name 2>&1 | Out-Null
-    Start-Sleep -Seconds 2
+    Start-Sleep -Seconds 1
     & pm2 delete $pm2Name 2>&1 | Out-Null
     Start-Sleep -Seconds 1
-
-    $portProcess = Get-NetTCPConnection -LocalPort $apiPort -ErrorAction SilentlyContinue |
-        Select-Object -ExpandProperty OwningProcess -Unique
-    if ($portProcess) {
-        Write-Host "Killing process(es) on port $apiPort..." -ForegroundColor Yellow
-        foreach ($procId in @($portProcess)) {
-            Stop-Process -Id $procId -Force -ErrorAction SilentlyContinue
-        }
-        Start-Sleep -Seconds 2
-    }
-    Write-Host "PM2 process stopped." -ForegroundColor Green
+    Write-Host "PM2 app stopped/deleted if it existed. Other PM2 apps left alone." -ForegroundColor Green
 } else {
     Write-Host "WARNING: PM2 not found. Skipping PM2 stop." -ForegroundColor Yellow
 }
 Write-Host ""
+
+# Step 2: Pick free ports (no process kills)
+Write-Host "Step 2: Selecting free API and IIS ports..." -ForegroundColor Green
+$iisBoundPorts = @(Get-IisBoundPorts)
+Write-Host ("IIS already bound ports: " + (($iisBoundPorts | Sort-Object) -join ", ")) -ForegroundColor Gray
+
+# Prefer previously saved ports if still free
+$portsFile = Join-Path $scriptPath "deploy-ports.json"
+$preferredApi = $null
+$preferredIis = $null
+if (Test-Path $portsFile) {
+    try {
+        $saved = Get-Content $portsFile -Raw | ConvertFrom-Json
+        $preferredApi = [int]$saved.apiPort
+        $preferredIis = [int]$saved.iisPort
+        Write-Host ("Found saved ports from last deploy: API " + $preferredApi + ", IIS " + $preferredIis) -ForegroundColor Gray
+    } catch {
+        # ignore corrupt file
+    }
+}
+
+if ($preferredApi -and -not (Test-TcpPortInUse -Port $preferredApi)) {
+    $apiPort = $preferredApi
+} else {
+    $apiPort = Get-NextFreePort -StartPort $apiPortStart
+}
+
+if ($preferredIis -and ($iisBoundPorts -notcontains $preferredIis) -and -not (Test-TcpPortInUse -Port $preferredIis)) {
+    $iisPort = $preferredIis
+} else {
+    $iisPort = Get-NextFreePort -StartPort $iisPortStart -AlsoAvoid $iisBoundPorts
+}
+
+Write-Host ("Selected API port:  " + $apiPort + " (loopback Node / PM2)") -ForegroundColor Yellow
+Write-Host ("Selected IIS port:  " + $iisPort + " (public site)") -ForegroundColor Yellow
+Write-Host ""
+
+# Persist selection for next deploy
+@{
+    apiPort = $apiPort
+    iisPort = $iisPort
+    updatedAt = (Get-Date).ToString("o")
+} | ConvertTo-Json | Set-Content -Path $portsFile -Encoding UTF8
 
 # Step 3: Build frontend
 Write-Host "Step 3: Building frontend..." -ForegroundColor Green
@@ -87,13 +170,19 @@ if ($LASTEXITCODE -ne 0) {
     Write-Host "Frontend build failed!" -ForegroundColor Red
     exit 1
 }
-if (Test-Path "web.config") {
-    Copy-Item -Path "web.config" -Destination "dist\web.config" -Force
-    Write-Host "web.config copied to dist!" -ForegroundColor Green
-} else {
-    Write-Host "ERROR: web.config not found!" -ForegroundColor Red
+
+# Generate web.config with chosen API port (never hardcode)
+if (-not (Test-Path "web.config")) {
+    Write-Host "ERROR: web.config template not found!" -ForegroundColor Red
     exit 1
 }
+$webConfig = Get-Content -Path "web.config" -Raw
+$webConfig = $webConfig.Replace("__API_PORT__", [string]$apiPort)
+# Support older checked-out templates that still had a literal 3011
+$webConfig = $webConfig.Replace("127.0.0.1:3011", ("127.0.0.1:" + $apiPort))
+$webConfig = $webConfig.Replace("localhost:3011", ("localhost:" + $apiPort))
+Set-Content -Path "dist\web.config" -Value $webConfig -Encoding UTF8
+Write-Host ("web.config written for API port " + $apiPort) -ForegroundColor Green
 Write-Host "Frontend built successfully!" -ForegroundColor Green
 Write-Host ""
 
@@ -116,7 +205,7 @@ if ($LASTEXITCODE -ne 0 -and -not (Test-Path "dist\index.js")) {
 Write-Host "Backend built successfully!" -ForegroundColor Green
 Write-Host ""
 
-# Step 5: Ensure .env (do not overwrite DB credentials; only refresh PORT / ALLOWED_ORIGINS)
+# Step 5: Ensure .env (keep DB credentials; set PORT / ALLOWED_ORIGINS)
 Write-Host "Step 5: Checking backend .env..." -ForegroundColor Green
 $backendEnvPath = Join-Path $scriptPath "server\.env"
 $allowedOrigins = @(
@@ -163,6 +252,15 @@ if (-not (Test-Path $backendEnvPath)) {
     Set-Content -Path $backendEnvPath -Value $envContent -Encoding UTF8
     Write-Host "Updated PORT and ALLOWED_ORIGINS in server\.env" -ForegroundColor Green
 }
+
+# Keep ecosystem.config.js PORT in sync with selected apiPort
+$ecoPath = Join-Path $scriptPath "server\ecosystem.config.js"
+if (Test-Path $ecoPath) {
+    $eco = Get-Content -Path $ecoPath -Raw
+    $eco = [regex]::Replace($eco, "PORT:\s*\d+", ("PORT: " + $apiPort))
+    Set-Content -Path $ecoPath -Value $eco -Encoding UTF8
+    Write-Host ("Updated ecosystem.config.js PORT=" + $apiPort) -ForegroundColor Green
+}
 Write-Host ""
 
 # Step 6: Copy frontend to IIS
@@ -181,7 +279,7 @@ Write-Host "Frontend copied to IIS!" -ForegroundColor Green
 Write-Host ""
 
 # Step 7: Start PM2
-Write-Host ("Step 7: Starting PM2 (" + $pm2Name + ")...") -ForegroundColor Green
+Write-Host ("Step 7: Starting PM2 (" + $pm2Name + ") on port " + $apiPort + "...") -ForegroundColor Green
 Set-Location (Join-Path $scriptPath "server")
 New-Item -ItemType Directory -Path "logs" -Force | Out-Null
 
@@ -206,7 +304,7 @@ if ($pm2Check) {
 }
 Write-Host ""
 
-# Step 8: Configure IIS site
+# Step 8: Configure IIS site on chosen free port only
 Write-Host ("Step 8: Configuring IIS website (" + $siteName + ") on port " + $iisPort + "...") -ForegroundColor Green
 try {
     Import-Module WebAdministration -ErrorAction SilentlyContinue
@@ -230,11 +328,17 @@ try {
         Set-ItemProperty ("IIS:\Sites\" + $siteName) -Name physicalPath -Value $iisFrontendPath
         Stop-Website -Name $siteName -ErrorAction SilentlyContinue
         Start-Sleep -Seconds 1
-        $bindingPattern = "*:" + $iisPort + ":*"
-        $binding = Get-WebBinding -Name $siteName | Where-Object { $_.bindingInformation -like $bindingPattern }
-        if (-not $binding) {
-            New-WebBinding -Name $siteName -Protocol "http" -Port $iisPort -IPAddress "*"
+
+        # Replace bindings so we do not keep a conflicting old port (e.g. 8084)
+        $existingBindings = @(Get-WebBinding -Name $siteName -ErrorAction SilentlyContinue)
+        foreach ($b in $existingBindings) {
+            try {
+                Remove-WebBinding -Name $siteName -BindingInformation $b.bindingInformation -ErrorAction SilentlyContinue
+            } catch {
+                # continue
+            }
         }
+        New-WebBinding -Name $siteName -Protocol "http" -Port $iisPort -IPAddress "*"
     }
 
     $appPoolState = Get-WebAppPoolState -Name $appPoolName -ErrorAction SilentlyContinue
@@ -251,17 +355,17 @@ try {
 }
 Write-Host ""
 
-# Step 8b: ARR proxy
-Write-Host "Step 8b: Ensuring ARR reverse-proxy is enabled..." -ForegroundColor Green
+# Step 8b: Do NOT change shared ARR timeout (other sites depend on it).
+# Only ensure ARR proxy feature is enabled if appcmd is present.
+Write-Host "Step 8b: Ensuring ARR proxy is enabled (timeout left unchanged)..." -ForegroundColor Green
 try {
     $appcmd = Join-Path $env:windir "system32\inetsrv\appcmd.exe"
     if (Test-Path $appcmd) {
         & $appcmd set config -section:system.webServer/proxy /enabled:"true" /commit:apphost 2>&1 | Out-Null
-        & $appcmd set config -section:system.webServer/proxy /timeout:"00:10:00" /commit:apphost 2>&1 | Out-Null
-        Write-Host "ARR proxy enabled." -ForegroundColor Green
+        Write-Host "ARR proxy enabled (existing timeout preserved)." -ForegroundColor Green
     }
 } catch {
-    Write-Host ("WARNING: Could not configure ARR: " + $_) -ForegroundColor Yellow
+    Write-Host ("WARNING: Could not enable ARR: " + $_) -ForegroundColor Yellow
 }
 Write-Host ""
 
@@ -289,6 +393,11 @@ Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "Deployment Complete!" -ForegroundColor Green
 Write-Host "========================================" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "This app only:" -ForegroundColor Cyan
+Write-Host ("  PM2:      " + $pm2Name) -ForegroundColor Yellow
+Write-Host ("  API:      http://127.0.0.1:" + $apiPort) -ForegroundColor Yellow
+Write-Host ("  IIS site: " + $siteName) -ForegroundColor Yellow
 Write-Host ""
 Write-Host "Access URLs:" -ForegroundColor Cyan
 Write-Host ("  Local:    http://localhost:" + $iisPort) -ForegroundColor Yellow

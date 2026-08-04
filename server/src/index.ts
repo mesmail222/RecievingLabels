@@ -1,7 +1,16 @@
+import path from 'path';
+import fs from 'fs';
 import express from 'express';
 import cors from 'cors';
+import dotenv from 'dotenv';
 import { labelsRouter } from './routes/labels';
 import { BODY_SIZE_LIMIT, DEFAULT_ALLOWED_ORIGINS } from './config/constants';
+
+// Load server/.env before reading PORT
+const serverEnv = path.resolve(__dirname, '../.env');
+if (fs.existsSync(serverEnv)) {
+  dotenv.config({ path: serverEnv });
+}
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '3011', 10);

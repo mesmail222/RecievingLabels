@@ -1,4 +1,5 @@
 // PM2 ecosystem file for production deployment
+// PORT is updated by deploy-shock-server-complete.ps1 to the selected free port.
 module.exports = {
   apps: [
     {
