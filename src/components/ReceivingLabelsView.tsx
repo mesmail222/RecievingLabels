@@ -1,11 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Loader2, Printer, RefreshCw, Tag } from 'lucide-react';
+import { Loader2, MonitorDown, Printer, RefreshCw, Tag } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Checkbox } from './ui/checkbox';
 import { MoLabelDocument } from './MoLabelDocument';
-import { fetchMorningLabels } from '../services/api';
+import {
+  fetchLocalPrintAgent,
+  fetchMorningLabels,
+  printWithLocalBarTender,
+  type LocalPrintAgentHealth,
+} from '../services/api';
 import { labelKey, type MoLabel, type MorningLabelsResponse } from '../types/labels';
 
 function todayInputValue(): string {
@@ -21,6 +26,12 @@ export function ReceivingLabelsView() {
   const [loading, setLoading] = useState(true);
   const [payload, setPayload] = useState<MorningLabelsResponse | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [printAgent, setPrintAgent] = useState<LocalPrintAgentHealth | null>(null);
+  const [checkingAgent, setCheckingAgent] = useState(true);
+  const [printing, setPrinting] = useState(false);
+  const [selectedPrinter, setSelectedPrinter] = useState(
+    () => localStorage.getItem('receiving-label-printer') ?? '',
+  );
 
   const load = async (selectedDate = date) => {
     setLoading(true);
@@ -39,6 +50,26 @@ export function ReceivingLabelsView() {
   useEffect(() => {
     void load(date);
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    void (async () => {
+      const agent = await fetchLocalPrintAgent();
+      setPrintAgent(agent);
+      setCheckingAgent(false);
+      if (!agent || agent.printers.length === 0) return;
+
+      const saved = localStorage.getItem('receiving-label-printer');
+      const savedStillExists = agent.printers.some((printer) => printer.name === saved);
+      if (saved && savedStillExists) {
+        setSelectedPrinter(saved);
+        return;
+      }
+
+      const defaultPrinter = agent.printers.find((printer) => printer.isDefault) ?? agent.printers[0];
+      setSelectedPrinter(defaultPrinter.name);
+      localStorage.setItem('receiving-label-printer', defaultPrinter.name);
+    })();
   }, []);
 
   const selectedLabels = useMemo(
@@ -60,7 +91,35 @@ export function ReceivingLabelsView() {
     });
   };
 
-  const handlePrint = () => {
+  const handlePrint = async () => {
+    if (selectedLabels.length === 0) {
+      toast.error('Select at least one MO label to print');
+      return;
+    }
+
+    if (!printAgent) {
+      toast.error('The local BarTender print agent is not running on this workstation');
+      return;
+    }
+    if (!selectedPrinter) {
+      toast.error('Select a label printer');
+      return;
+    }
+
+    setPrinting(true);
+    try {
+      const result = await printWithLocalBarTender(selectedPrinter, selectedLabels);
+      toast.success(
+        `Sent ${result.labelsPrinted} label${result.labelsPrinted === 1 ? '' : 's'} to ${result.printerName}`,
+      );
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'BarTender printing failed');
+    } finally {
+      setPrinting(false);
+    }
+  };
+
+  const handleBrowserPrint = () => {
     if (selectedLabels.length === 0) {
       toast.error('Select at least one MO label to print');
       return;
@@ -91,12 +150,54 @@ export function ReceivingLabelsView() {
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
             Refresh
           </Button>
-          <Button onClick={handlePrint} disabled={loading || selectedLabels.length === 0}>
-            <Printer className="h-4 w-4" />
-            Print {selectedLabels.length || ''} Label{selectedLabels.length === 1 ? '' : 's'}
+          {printAgent && printAgent.printers.length > 0 && (
+            <select
+              value={selectedPrinter}
+              onChange={(event) => {
+                setSelectedPrinter(event.target.value);
+                localStorage.setItem('receiving-label-printer', event.target.value);
+              }}
+              className="h-9 max-w-64 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700 shadow-sm"
+              aria-label="Label printer"
+            >
+              {printAgent.printers.map((printer) => (
+                <option key={printer.name} value={printer.name}>
+                  {printer.name}
+                </option>
+              ))}
+            </select>
+          )}
+          <Button
+            onClick={() => void handlePrint()}
+            disabled={
+              loading ||
+              printing ||
+              checkingAgent ||
+              !printAgent ||
+              !selectedPrinter ||
+              selectedLabels.length === 0
+            }
+          >
+            {printing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />}
+            Print {selectedLabels.length || ''} with BarTender
+          </Button>
+          <Button
+            variant="outline"
+            onClick={handleBrowserPrint}
+            disabled={loading || selectedLabels.length === 0}
+          >
+            <MonitorDown className="h-4 w-4" />
+            Browser print
           </Button>
         </div>
       </div>
+
+      {!checkingAgent && !printAgent && (
+        <div className="no-print rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          Local BarTender print agent not detected. Install/start it on this Receiving workstation to print the
+          shared <code className="font-mono text-xs">.btw</code> format. Browser print remains available.
+        </div>
+      )}
 
       <div className="no-print grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
         <Card>
