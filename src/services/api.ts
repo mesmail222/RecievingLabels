@@ -1,24 +1,16 @@
 import { getApiBaseUrl, getBackendUnreachableMessage } from '../config/api';
 import type { MoLabel, MorningLabelsResponse } from '../types/labels';
 
-const LOCAL_PRINT_AGENT_URL = 'http://127.0.0.1:38177';
-
-export interface LocalPrinter {
-  name: string;
-  model: string;
-  port: string;
-  isDefault: boolean;
+export interface BarTenderPrintStatus {
+  configured: boolean;
+  printerName: string | null;
+  message: string;
 }
 
-export interface LocalPrintAgentHealth {
-  status: 'ok';
-  template: string;
-  printers: LocalPrinter[];
-}
-
-export interface LocalPrintResult {
-  status: 'printed';
-  labelsPrinted: number;
+export interface BarTenderPrintResult {
+  status: 'queued';
+  labelsQueued: number;
+  mosSubmitted: number;
   printerName: string;
 }
 
@@ -38,7 +30,14 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
 
   if (!response.ok) {
     const text = await response.text().catch(() => '');
-    throw new Error(text || `Request failed (${response.status})`);
+    let message = text;
+    try {
+      const payload = JSON.parse(text) as { error?: string; message?: string };
+      message = payload.error || payload.message || text;
+    } catch {
+      // Keep a plain-text error response unchanged.
+    }
+    throw new Error(message || `Request failed (${response.status})`);
   }
 
   return response.json() as Promise<T>;
@@ -49,40 +48,16 @@ export function fetchMorningLabels(date?: string): Promise<MorningLabelsResponse
   return apiFetch<MorningLabelsResponse>(`/labels/morning${query}`);
 }
 
-export async function fetchLocalPrintAgent(): Promise<LocalPrintAgentHealth | null> {
-  const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), 1500);
-  try {
-    const response = await fetch(`${LOCAL_PRINT_AGENT_URL}/health`, {
-      signal: controller.signal,
-    });
-    if (!response.ok) return null;
-    return (await response.json()) as LocalPrintAgentHealth;
-  } catch {
-    return null;
-  } finally {
-    window.clearTimeout(timeout);
-  }
+export function fetchBarTenderPrintStatus(): Promise<BarTenderPrintStatus> {
+  return apiFetch<BarTenderPrintStatus>('/labels/print-status');
 }
 
-export async function printWithLocalBarTender(
-  printerName: string,
-  labels: MoLabel[],
-): Promise<LocalPrintResult> {
-  const response = await fetch(`${LOCAL_PRINT_AGENT_URL}/print`, {
+export function printWithBarTender(labels: MoLabel[]): Promise<BarTenderPrintResult> {
+  return apiFetch<BarTenderPrintResult>('/labels/print', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ printerName, labels }),
+    body: JSON.stringify({ labels }),
   });
-
-  const payload = (await response.json().catch(() => null)) as
-    | LocalPrintResult
-    | { error?: string }
-    | null;
-  if (!response.ok) {
-    throw new Error(payload && 'error' in payload && payload.error ? payload.error : 'BarTender printing failed');
-  }
-  return payload as LocalPrintResult;
 }

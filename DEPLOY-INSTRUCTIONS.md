@@ -15,6 +15,9 @@
 4. **Ensure database credentials exist**
    - Confirm `server\.env` has valid `DATABASE_*` values for ScheduleDB.
    - Deploy will set `PORT` and `ALLOWED_ORIGINS` automatically.
+   - Configure the `BARTENDER_*` values described in
+     [`printing/README.md`](printing/README.md). The print button remains
+     disabled until the required BarTender values are present.
 
 5. **Run the deployment script**
    ```powershell

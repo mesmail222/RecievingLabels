@@ -52,6 +52,8 @@ app.get('/', (_req, res) => {
     endpoints: {
       health: '/api/health',
       morningLabels: '/api/labels/morning',
+      barTenderPrintStatus: '/api/labels/print-status',
+      barTenderPrint: '/api/labels/print',
     },
   });
 });

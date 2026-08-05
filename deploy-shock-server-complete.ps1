@@ -249,7 +249,13 @@ if (-not (Test-Path $backendEnvPath)) {
         "DATABASE_PASSWORD=",
         ("PORT=" + $apiPort),
         "NODE_ENV=production",
-        ("ALLOWED_ORIGINS=" + $allowedOrigins)
+        ("ALLOWED_ORIGINS=" + $allowedOrigins),
+        "BARTENDER_INTEGRATION_URL=",
+        "BARTENDER_TEMPLATE_PATH=",
+        "BARTENDER_PRINTER_NAME=",
+        "BARTENDER_USERNAME=",
+        "BARTENDER_PASSWORD=",
+        "BARTENDER_TIMEOUT_MS=120000"
     ) -join "`r`n"
     Set-Content -Path $backendEnvPath -Value $template -Encoding UTF8
 } else {
@@ -270,8 +276,22 @@ if (-not (Test-Path $backendEnvPath)) {
         $envContent = $envContent.TrimEnd() + "`r`n" + $portLine + "`r`n"
     }
 
+    $barTenderDefaults = @{
+        BARTENDER_INTEGRATION_URL = ""
+        BARTENDER_TEMPLATE_PATH = ""
+        BARTENDER_PRINTER_NAME = ""
+        BARTENDER_USERNAME = ""
+        BARTENDER_PASSWORD = ""
+        BARTENDER_TIMEOUT_MS = "120000"
+    }
+    foreach ($entry in $barTenderDefaults.GetEnumerator()) {
+        if ($envContent -notmatch ("(?m)^" + [regex]::Escape($entry.Key) + "=")) {
+            $envContent = $envContent.TrimEnd() + "`r`n" + $entry.Key + "=" + $entry.Value + "`r`n"
+        }
+    }
+
     Set-Content -Path $backendEnvPath -Value $envContent -Encoding UTF8
-    Write-Host "Updated PORT and ALLOWED_ORIGINS in server\.env" -ForegroundColor Green
+    Write-Host "Updated PORT, ALLOWED_ORIGINS, and BarTender settings in server\.env" -ForegroundColor Green
 }
 
 # Keep ecosystem.config.js PORT in sync with selected apiPort

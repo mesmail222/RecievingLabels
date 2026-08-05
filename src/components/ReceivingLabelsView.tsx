@@ -6,10 +6,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/
 import { Checkbox } from './ui/checkbox';
 import { MoLabelDocument } from './MoLabelDocument';
 import {
-  fetchLocalPrintAgent,
+  fetchBarTenderPrintStatus,
   fetchMorningLabels,
-  printWithLocalBarTender,
-  type LocalPrintAgentHealth,
+  printWithBarTender,
+  type BarTenderPrintStatus,
 } from '../services/api';
 import { labelKey, type MoLabel, type MorningLabelsResponse } from '../types/labels';
 
@@ -26,12 +26,9 @@ export function ReceivingLabelsView() {
   const [loading, setLoading] = useState(true);
   const [payload, setPayload] = useState<MorningLabelsResponse | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [printAgent, setPrintAgent] = useState<LocalPrintAgentHealth | null>(null);
-  const [checkingAgent, setCheckingAgent] = useState(true);
+  const [printStatus, setPrintStatus] = useState<BarTenderPrintStatus | null>(null);
+  const [checkingPrintStatus, setCheckingPrintStatus] = useState(true);
   const [printing, setPrinting] = useState(false);
-  const [selectedPrinter, setSelectedPrinter] = useState(
-    () => localStorage.getItem('receiving-label-printer') ?? '',
-  );
 
   const load = async (selectedDate = date) => {
     setLoading(true);
@@ -54,21 +51,17 @@ export function ReceivingLabelsView() {
 
   useEffect(() => {
     void (async () => {
-      const agent = await fetchLocalPrintAgent();
-      setPrintAgent(agent);
-      setCheckingAgent(false);
-      if (!agent || agent.printers.length === 0) return;
-
-      const saved = localStorage.getItem('receiving-label-printer');
-      const savedStillExists = agent.printers.some((printer) => printer.name === saved);
-      if (saved && savedStillExists) {
-        setSelectedPrinter(saved);
-        return;
+      try {
+        setPrintStatus(await fetchBarTenderPrintStatus());
+      } catch (error) {
+        setPrintStatus({
+          configured: false,
+          printerName: null,
+          message: error instanceof Error ? error.message : 'Could not check BarTender printing.',
+        });
+      } finally {
+        setCheckingPrintStatus(false);
       }
-
-      const defaultPrinter = agent.printers.find((printer) => printer.isDefault) ?? agent.printers[0];
-      setSelectedPrinter(defaultPrinter.name);
-      localStorage.setItem('receiving-label-printer', defaultPrinter.name);
     })();
   }, []);
 
@@ -97,20 +90,16 @@ export function ReceivingLabelsView() {
       return;
     }
 
-    if (!printAgent) {
-      toast.error('The local BarTender print agent is not running on this workstation');
-      return;
-    }
-    if (!selectedPrinter) {
-      toast.error('Select a label printer');
+    if (!printStatus?.configured) {
+      toast.error(printStatus?.message ?? 'BarTender printing is not configured');
       return;
     }
 
     setPrinting(true);
     try {
-      const result = await printWithLocalBarTender(selectedPrinter, selectedLabels);
+      const result = await printWithBarTender(selectedLabels);
       toast.success(
-        `Sent ${result.labelsPrinted} label${result.labelsPrinted === 1 ? '' : 's'} to ${result.printerName}`,
+        `Queued ${result.labelsQueued} label${result.labelsQueued === 1 ? '' : 's'} for ${result.printerName}`,
       );
     } catch (error) {
       toast.error(error instanceof Error ? error.message : 'BarTender printing failed');
@@ -150,31 +139,13 @@ export function ReceivingLabelsView() {
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
             Refresh
           </Button>
-          {printAgent && printAgent.printers.length > 0 && (
-            <select
-              value={selectedPrinter}
-              onChange={(event) => {
-                setSelectedPrinter(event.target.value);
-                localStorage.setItem('receiving-label-printer', event.target.value);
-              }}
-              className="h-9 max-w-64 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700 shadow-sm"
-              aria-label="Label printer"
-            >
-              {printAgent.printers.map((printer) => (
-                <option key={printer.name} value={printer.name}>
-                  {printer.name}
-                </option>
-              ))}
-            </select>
-          )}
           <Button
             onClick={() => void handlePrint()}
             disabled={
               loading ||
               printing ||
-              checkingAgent ||
-              !printAgent ||
-              !selectedPrinter ||
+              checkingPrintStatus ||
+              !printStatus?.configured ||
               selectedLabels.length === 0
             }
           >
@@ -192,10 +163,10 @@ export function ReceivingLabelsView() {
         </div>
       </div>
 
-      {!checkingAgent && !printAgent && (
+      {!checkingPrintStatus && !printStatus?.configured && (
         <div className="no-print rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          Local BarTender print agent not detected. Install/start it on this Receiving workstation to print the
-          shared <code className="font-mono text-xs">.btw</code> format. Browser print remains available.
+          {printStatus?.message ?? 'BarTender printing is not configured on the server.'} Browser print remains
+          available.
         </div>
       )}
 
