@@ -34,7 +34,23 @@
   }
 }
 
+@page {
+  size: 3.775in 2.775in;
+  margin: 0;
+}
+
 @media print {
+  html,
+  body,
+  #root {
+    width: 3.775in !important;
+    min-width: 3.775in !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: white !important;
+  }
+
   body * {
     visibility: hidden;
   }
@@ -48,7 +64,16 @@
     position: absolute;
     left: 0;
     top: 0;
-    width: 100%;
+    width: 3.775in !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  .print-labels > div {
+    display: block !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    gap: 0 !important;
   }
 
   .no-print {
@@ -56,7 +81,59 @@
   }
 
   .mo-label {
-    break-inside: avoid;
+    box-sizing: border-box !important;
+    width: 3.775in !important;
+    min-width: 3.775in !important;
+    max-width: 3.775in !important;
+    height: 2.775in !important;
+    min-height: 2.775in !important;
+    max-height: 2.775in !important;
+    margin: 0 !important;
+    padding: 0.16in 0.2in !important;
+    overflow: hidden !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    font-size: 13pt !important;
+    line-height: 1.15 !important;
+    break-inside: avoid-page;
+    break-after: page;
     page-break-inside: avoid;
+    page-break-after: always;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  .mo-label:last-child {
+    break-after: auto;
+    page-break-after: auto;
+  }
+
+  .mo-label-date {
+    font-size: 10pt !important;
+  }
+
+  .mo-label-header {
+    margin-top: 0.06in !important;
+    padding-bottom: 0.05in !important;
+    border: 0 !important;
+  }
+
+  .mo-label-number {
+    font-size: 17pt !important;
+    line-height: 1.1 !important;
+  }
+
+  .mo-label-quantity {
+    font-size: 14pt !important;
+  }
+
+  .mo-label-components {
+    margin-top: 0.08in !important;
+  }
+
+  .mo-label-component {
+    min-height: 0.17in;
+    font-size: 12pt !important;
+    line-height: 1.05 !important;
   }
 }

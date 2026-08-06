@@ -1,6 +1,6 @@
 import sql from 'mssql';
 import { getDbConnection } from '../config/database';
-import { LABEL_COMPONENT_TYPE } from '../config/constants';
+import { EXCLUDED_PARENT_ITEM_SUFFIX, LABEL_COMPONENT_TYPE } from '../config/constants';
 
 export interface LabelComponent {
   itemNumber: string;
@@ -77,6 +77,7 @@ function resolveDateParam(dateParam?: string): string {
  * Morning MO kit labels from ScheduleDB:
  * - Open MOs created on the selected date (dbo.OpenMO.MOCreatedDate)
  * - Excludes blanks (item # starts with 2, or description contains BLANK)
+ * - Excludes RT TIP parent items whose item number ends in -02
  * - BOM components where ComponentType = 'N', OperationSequenceNumber starts with 5,
  *   and not blank/winding comps (comp # starts with 2 / desc contains BLANK or WINDING)
  * - Point Use (5HDL) filter deferred
@@ -89,6 +90,7 @@ export async function getMorningLabels(dateParam?: string): Promise<MorningLabel
     .request()
     .input('createdDate', sql.Date, date)
     .input('componentType', sql.VarChar(10), LABEL_COMPONENT_TYPE)
+    .input('excludedParentPattern', sql.VarChar(20), `%${EXCLUDED_PARENT_ITEM_SUFFIX}`)
     .query(`
       SELECT
         LTRIM(RTRIM(mo.[MONumber])) AS MONumber,
@@ -118,6 +120,7 @@ export async function getMorningLabels(dateParam?: string): Promise<MorningLabel
        )
       WHERE CAST(mo.[MOCreatedDate] AS DATE) = @createdDate
         AND LEFT(LTRIM(RTRIM(mo.[ItemNumber])), 1) <> '2'
+        AND LTRIM(RTRIM(mo.[ItemNumber])) NOT LIKE @excludedParentPattern
         AND LTRIM(RTRIM(ISNULL(mo.[ItemDescription], ''))) NOT LIKE '%BLANK%'
       ORDER BY
         mo.[MONumber],
@@ -131,6 +134,9 @@ export async function getMorningLabels(dateParam?: string): Promise<MorningLabel
     const moNumber = toStr(row.MONumber);
     const itemNumber = toStr(row.ItemNumber);
     if (!moNumber || !itemNumber) continue;
+    // Keep this guard even though SQL applies the same filter, so future query
+    // changes cannot accidentally put RT TIP labels back into the print list.
+    if (itemNumber.endsWith(EXCLUDED_PARENT_ITEM_SUFFIX)) continue;
 
     const key = `${moNumber}|${itemNumber}`;
     let label = byMo.get(key);
