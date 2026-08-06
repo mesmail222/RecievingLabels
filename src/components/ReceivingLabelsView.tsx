@@ -187,11 +187,9 @@ export function ReceivingLabelsView() {
       </div>
 
       <div className="print-labels hidden print:block">
-        <div className="flex flex-col gap-6 p-4">
-          {selectedLabels.map((label) => (
-            <MoLabelDocument key={`print-${labelKey(label)}`} label={label} />
-          ))}
-        </div>
+        {selectedLabels.map((label) => (
+          <MoLabelDocument key={`print-${labelKey(label)}`} label={label} />
+        ))}
       </div>
     </div>
   );

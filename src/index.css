@@ -44,11 +44,19 @@
   body,
   #root {
     width: 3in !important;
-    min-width: 3in !important;
+    min-width: 0 !important;
+    max-width: 3in !important;
     height: auto !important;
+    min-height: 0 !important;
     margin: 0 !important;
     padding: 0 !important;
     background: white !important;
+    overflow: visible !important;
+  }
+
+  .no-print,
+  [data-sonner-toaster] {
+    display: none !important;
   }
 
   body * {
@@ -60,43 +68,50 @@
     visibility: visible;
   }
 
+  /* Flatten the app shell. The label stack has to sit in normal flow starting at
+     the page origin: an absolutely positioned or overflow-scrolling ancestor is
+     not fragmented reliably, which drifts each label off its physical die-cut.
+     The chain is #root > shell > main > max-w wrapper > view root > .print-labels;
+     every link contributes padding, max-width, or a space-y-* margin. */
+  #root > div,
+  #root main,
+  #root main > div,
+  #root main > div > div,
   .print-labels {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 3in !important;
-    margin: 0 !important;
-    padding: 0 !important;
-  }
-
-  .print-labels > div {
     display: block !important;
+    position: static !important;
+    width: auto !important;
+    max-width: none !important;
+    min-height: 0 !important;
     margin: 0 !important;
     padding: 0 !important;
     gap: 0 !important;
-  }
-
-  .no-print {
-    display: none !important;
+    overflow: visible !important;
+    background: none !important;
+    box-shadow: none !important;
   }
 
   .mo-label {
     box-sizing: border-box !important;
-    display: block !important;
+    display: flex !important;
+    flex-direction: column !important;
     width: 3in !important;
     min-width: 3in !important;
     max-width: 3in !important;
-    height: 4in !important;
-    min-height: 4in !important;
-    max-height: 4in !important;
+    /* Deliberately a hair under the 4in page box: at print DPI an element sized
+       to exactly the page height rounds over the edge and spawns a blank page,
+       which is what pushed every label past its die-cut. */
+    height: 3.92in !important;
+    min-height: 0 !important;
+    max-height: 3.92in !important;
     margin: 0 !important;
-    padding: 0.22in 0.18in !important;
+    padding: 0.2in 0.2in 0.16in !important;
     overflow: hidden !important;
     border: 0 !important;
     border-radius: 0 !important;
     font-size: 15pt !important;
     line-height: 1.15 !important;
-    break-inside: avoid-page;
+    break-inside: avoid;
     break-after: page;
     page-break-inside: avoid;
     page-break-after: always;
@@ -110,12 +125,14 @@
   }
 
   .mo-label-date {
+    flex: 0 0 auto !important;
     font-size: 11pt !important;
   }
 
   .mo-label-header {
-    margin-top: 0.06in !important;
-    padding-bottom: 0.05in !important;
+    flex: 0 0 auto !important;
+    margin-top: 0.04in !important;
+    padding-bottom: 0.06in !important;
     border: 0 !important;
   }
 
@@ -128,49 +145,38 @@
     font-size: 17pt !important;
   }
 
+  /* The component rows own the remaining height and space themselves across it,
+     instead of stacking tight against the header and leaving the label blank. */
   .mo-label-components {
-    margin-top: 0.08in !important;
+    display: flex !important;
+    flex: 1 1 auto !important;
+    flex-direction: column !important;
+    justify-content: space-evenly !important;
+    min-height: 0 !important;
+    margin-top: 0 !important;
+  }
+
+  .mo-label-components > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 0 !important;
   }
 
   .mo-label-component {
-    min-height: 0.23in;
+    flex: 0 0 auto !important;
+    min-height: 0 !important;
     font-size: 15pt !important;
-    line-height: 1.1 !important;
-  }
-
-  .mo-label--compact .mo-label-components {
-    margin-top: 0.05in !important;
-  }
-
-  .mo-label--compact .mo-label-components > :not([hidden]) ~ :not([hidden]) {
-    margin-top: 0.01in !important;
+    line-height: 1.15 !important;
   }
 
   .mo-label--compact .mo-label-component {
-    min-height: 0.17in;
     font-size: 11pt !important;
-    line-height: 1 !important;
-  }
-
-  .mo-label--dense {
-    padding-top: 0.14in !important;
-    padding-bottom: 0.14in !important;
+    line-height: 1.1 !important;
   }
 
   .mo-label--dense .mo-label-header {
     margin-top: 0.02in !important;
   }
 
-  .mo-label--dense .mo-label-components {
-    margin-top: 0.03in !important;
-  }
-
-  .mo-label--dense .mo-label-components > :not([hidden]) ~ :not([hidden]) {
-    margin-top: 0 !important;
-  }
-
   .mo-label--dense .mo-label-component {
-    min-height: 0.13in;
     font-size: 8.5pt !important;
     line-height: 1 !important;
   }
