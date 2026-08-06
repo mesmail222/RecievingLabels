@@ -54,6 +54,9 @@
     overflow: visible !important;
   }
 
+  /* Kept at ID-level specificity so the shell-flattening reset below can never
+     out-rank it and pull a hidden block back into the print flow. */
+  #root .no-print,
   .no-print,
   [data-sonner-toaster] {
     display: none !important;
@@ -73,10 +76,10 @@
      not fragmented reliably, which drifts each label off its physical die-cut.
      The chain is #root > shell > main > max-w wrapper > view root > .print-labels;
      every link contributes padding, max-width, or a space-y-* margin. */
-  #root > div,
+  #root > div:not(.no-print),
   #root main,
-  #root main > div,
-  #root main > div > div,
+  #root main > div:not(.no-print),
+  #root main > div > div:not(.no-print),
   .print-labels {
     display: block !important;
     position: static !important;
