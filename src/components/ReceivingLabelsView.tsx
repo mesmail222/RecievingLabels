@@ -163,13 +163,6 @@ export function ReceivingLabelsView() {
         </div>
       </div>
 
-      {!checkingPrintStatus && !printStatus?.configured && (
-        <div className="no-print rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          {printStatus?.message ?? 'BarTender printing is not configured on the server.'} Browser print remains
-          available.
-        </div>
-      )}
-
       <div className="no-print grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
         <Card>
           <CardHeader>
