@@ -35,7 +35,7 @@
 }
 
 @page {
-  size: 3.775in 2.775in;
+  size: 3in 4in;
   margin: 0;
 }
 
@@ -43,8 +43,8 @@
   html,
   body,
   #root {
-    width: 3.775in !important;
-    min-width: 3.775in !important;
+    width: 3in !important;
+    min-width: 3in !important;
     height: auto !important;
     margin: 0 !important;
     padding: 0 !important;
@@ -64,7 +64,7 @@
     position: absolute;
     left: 0;
     top: 0;
-    width: 3.775in !important;
+    width: 3in !important;
     margin: 0 !important;
     padding: 0 !important;
   }
@@ -82,18 +82,19 @@
 
   .mo-label {
     box-sizing: border-box !important;
-    width: 3.775in !important;
-    min-width: 3.775in !important;
-    max-width: 3.775in !important;
-    height: 2.775in !important;
-    min-height: 2.775in !important;
-    max-height: 2.775in !important;
+    display: block !important;
+    width: 3in !important;
+    min-width: 3in !important;
+    max-width: 3in !important;
+    height: 4in !important;
+    min-height: 4in !important;
+    max-height: 4in !important;
     margin: 0 !important;
-    padding: 0.16in 0.2in !important;
+    padding: 0.22in 0.18in !important;
     overflow: hidden !important;
     border: 0 !important;
     border-radius: 0 !important;
-    font-size: 13pt !important;
+    font-size: 15pt !important;
     line-height: 1.15 !important;
     break-inside: avoid-page;
     break-after: page;
@@ -109,7 +110,7 @@
   }
 
   .mo-label-date {
-    font-size: 10pt !important;
+    font-size: 11pt !important;
   }
 
   .mo-label-header {
@@ -119,12 +120,12 @@
   }
 
   .mo-label-number {
-    font-size: 17pt !important;
+    font-size: 21pt !important;
     line-height: 1.1 !important;
   }
 
   .mo-label-quantity {
-    font-size: 14pt !important;
+    font-size: 17pt !important;
   }
 
   .mo-label-components {
@@ -132,8 +133,45 @@
   }
 
   .mo-label-component {
+    min-height: 0.23in;
+    font-size: 15pt !important;
+    line-height: 1.1 !important;
+  }
+
+  .mo-label--compact .mo-label-components {
+    margin-top: 0.05in !important;
+  }
+
+  .mo-label--compact .mo-label-components > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 0.01in !important;
+  }
+
+  .mo-label--compact .mo-label-component {
     min-height: 0.17in;
-    font-size: 12pt !important;
-    line-height: 1.05 !important;
+    font-size: 11pt !important;
+    line-height: 1 !important;
+  }
+
+  .mo-label--dense {
+    padding-top: 0.14in !important;
+    padding-bottom: 0.14in !important;
+  }
+
+  .mo-label--dense .mo-label-header {
+    margin-top: 0.02in !important;
+  }
+
+  .mo-label--dense .mo-label-components {
+    margin-top: 0.03in !important;
+  }
+
+  .mo-label--dense .mo-label-components > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 0 !important;
+  }
+
+  .mo-label--dense .mo-label-component {
+    min-height: 0.13in;
+    font-size: 8.5pt !important;
+    line-height: 1 !important;
   }
 }

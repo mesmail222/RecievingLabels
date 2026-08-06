@@ -1,16 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Loader2, MonitorDown, Printer, RefreshCw, Tag } from 'lucide-react';
+import { Loader2, Printer, RefreshCw, Tag } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Checkbox } from './ui/checkbox';
 import { MoLabelDocument } from './MoLabelDocument';
-import {
-  fetchBarTenderPrintStatus,
-  fetchMorningLabels,
-  printWithBarTender,
-  type BarTenderPrintStatus,
-} from '../services/api';
+import { fetchMorningLabels } from '../services/api';
 import { labelKey, type MoLabel, type MorningLabelsResponse } from '../types/labels';
 
 function todayInputValue(): string {
@@ -26,9 +21,6 @@ export function ReceivingLabelsView() {
   const [loading, setLoading] = useState(true);
   const [payload, setPayload] = useState<MorningLabelsResponse | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [printStatus, setPrintStatus] = useState<BarTenderPrintStatus | null>(null);
-  const [checkingPrintStatus, setCheckingPrintStatus] = useState(true);
-  const [printing, setPrinting] = useState(false);
 
   const load = async (selectedDate = date) => {
     setLoading(true);
@@ -47,22 +39,6 @@ export function ReceivingLabelsView() {
   useEffect(() => {
     void load(date);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    void (async () => {
-      try {
-        setPrintStatus(await fetchBarTenderPrintStatus());
-      } catch (error) {
-        setPrintStatus({
-          configured: false,
-          printerName: null,
-          message: error instanceof Error ? error.message : 'Could not check BarTender printing.',
-        });
-      } finally {
-        setCheckingPrintStatus(false);
-      }
-    })();
   }, []);
 
   const selectedLabels = useMemo(
@@ -84,31 +60,7 @@ export function ReceivingLabelsView() {
     });
   };
 
-  const handlePrint = async () => {
-    if (selectedLabels.length === 0) {
-      toast.error('Select at least one MO label to print');
-      return;
-    }
-
-    if (!printStatus?.configured) {
-      toast.error(printStatus?.message ?? 'BarTender printing is not configured');
-      return;
-    }
-
-    setPrinting(true);
-    try {
-      const result = await printWithBarTender(selectedLabels);
-      toast.success(
-        `Queued ${result.labelsQueued} label${result.labelsQueued === 1 ? '' : 's'} for ${result.printerName}`,
-      );
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'BarTender printing failed');
-    } finally {
-      setPrinting(false);
-    }
-  };
-
-  const handleBrowserPrint = () => {
+  const handlePrint = () => {
     if (selectedLabels.length === 0) {
       toast.error('Select at least one MO label to print');
       return;
@@ -139,26 +91,9 @@ export function ReceivingLabelsView() {
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
             Refresh
           </Button>
-          <Button
-            onClick={() => void handlePrint()}
-            disabled={
-              loading ||
-              printing ||
-              checkingPrintStatus ||
-              !printStatus?.configured ||
-              selectedLabels.length === 0
-            }
-          >
-            {printing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />}
-            Print {selectedLabels.length || ''} with BarTender
-          </Button>
-          <Button
-            variant="outline"
-            onClick={handleBrowserPrint}
-            disabled={loading || selectedLabels.length === 0}
-          >
-            <MonitorDown className="h-4 w-4" />
-            Browser print
+          <Button onClick={handlePrint} disabled={loading || selectedLabels.length === 0}>
+            <Printer className="h-4 w-4" />
+            Print {selectedLabels.length || ''} Label{selectedLabels.length === 1 ? '' : 's'}
           </Button>
         </div>
       </div>
@@ -233,7 +168,8 @@ export function ReceivingLabelsView() {
           <CardHeader>
             <CardTitle className="text-base">Label preview</CardTitle>
             <CardDescription>
-              Layout matches Receiving bag stickers. Use Print to send selected labels to the printer.
+              Print at 3 × 4 in, Portrait, 100% scale, no margins, one page per sheet, with headers and
+              footers off.
             </CardDescription>
           </CardHeader>
           <CardContent>
