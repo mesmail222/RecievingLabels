@@ -14,7 +14,7 @@ export function MoLabelDocument({ label }: MoLabelDocumentProps) {
 
   return (
     <div
-      className={`mo-label box-border flex h-[4in] w-[3in] flex-col overflow-hidden border-2 border-black bg-white p-3 font-mono text-sm text-black ${densityClass}`}
+      className={`mo-label box-border flex h-[3in] w-[4in] flex-col overflow-hidden border-2 border-black bg-white p-3 font-mono text-sm text-black ${densityClass}`}
     >
       <div className="mo-label-date flex shrink-0 justify-end text-xs tracking-wide">
         <span>DATE: {label.createdDate}</span>

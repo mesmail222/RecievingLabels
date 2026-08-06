@@ -168,7 +168,7 @@ export function ReceivingLabelsView() {
           <CardHeader>
             <CardTitle className="text-base">Label preview</CardTitle>
             <CardDescription>
-              Print at 3 × 4 in, Portrait, 100% scale, no margins, one page per sheet, with headers and
+              Print at 4 × 3 in, Landscape, 100% scale, no margins, one page per sheet, with headers and
               footers off.
             </CardDescription>
           </CardHeader>

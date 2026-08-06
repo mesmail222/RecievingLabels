@@ -35,7 +35,7 @@
 }
 
 @page {
-  size: 3in 4in;
+  size: 4in 3in;
   margin: 0;
 }
 
@@ -43,9 +43,9 @@
   html,
   body,
   #root {
-    width: 3in !important;
+    width: 4in !important;
     min-width: 0 !important;
-    max-width: 3in !important;
+    max-width: 4in !important;
     height: auto !important;
     min-height: 0 !important;
     margin: 0 !important;
@@ -98,15 +98,15 @@
     box-sizing: border-box !important;
     display: flex !important;
     flex-direction: column !important;
-    width: 3in !important;
-    min-width: 3in !important;
-    max-width: 3in !important;
-    /* Deliberately a hair under the 4in page box: at print DPI an element sized
+    width: 4in !important;
+    min-width: 4in !important;
+    max-width: 4in !important;
+    /* Deliberately a hair under the 3in page box: at print DPI an element sized
        to exactly the page height rounds over the edge and spawns a blank page,
        which is what pushed every label past its die-cut. */
-    height: 3.92in !important;
+    height: 2.92in !important;
     min-height: 0 !important;
-    max-height: 3.92in !important;
+    max-height: 2.92in !important;
     margin: 0 !important;
     padding: 0.2in 0.2in 0.16in !important;
     overflow: hidden !important;
