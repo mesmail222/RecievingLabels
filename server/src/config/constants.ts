@@ -15,6 +15,3 @@ export const LABEL_COMPONENT_TYPE = 'N';
 export const LABEL_POINT_USE = '5HDL';
 /** Finished RT TIP parent items do not receive Receiving kit labels. */
 export const EXCLUDED_PARENT_ITEM_SUFFIX = '-02';
-
-/** Parent items beginning with 4 do not receive Receiving kit labels. */
-export const EXCLUDED_PARENT_ITEM_PREFIX = '4';
